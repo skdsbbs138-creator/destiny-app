@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Кубик Судьбы</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #000;
+  color: #fff;
+  font-family: 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Фон - канвас с туманностями */
+#bg-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+}
+
+.app {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 20px;
+}
+
+.logo {
+  font-size: 30px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #c084fc, #f472b6, #818cf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 6px;
+  text-align: center;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.dots {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.dot.active {
+  background: linear-gradient(135deg, #c084fc, #f472b6);
+  width: 28px;
+  border-radius: 4px;
+}
+
+.steps { width: 100%; max-width: 400px; }
+
+.step {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+  animation: slideUp 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.step.active { display: flex; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.step-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #c084fc;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.step-title {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.step-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.6;
+}
+
+textarea {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(192,132,252,0.25);
+  border-radius: 18px;
+  padding: 18px;
+  color: #fff;
+  font-size: 15px;
+  font-family: inherit;
+  resize: none;
+  height: 130px;
+  outline: none;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+}
+
+textarea:focus {
+  border-color: rgba(192,132,252,0.7);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 0 0 3px rgba(192,132,252,0.1);
+}
+
+textarea::placeholder { color: rgba(255,255,255,0.2); }
+
+.btn {
+  width: 100%;
+  padding: 18px;
+  border: none;
+  border-radius: 18px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: linear-gradient(135deg, #c084fc, #f472b6);
+  color: #fff;
+  letter-spacing: 0.3px;
+  box-shadow: 0 8px 32px rgba(192,132,252,0.35);
+}
+
+.btn:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(192,132,252,0.5); }
+.btn:active { transform: translateY(0); }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(192,132,252,0.3);
+  color: rgba(255,255,255,0.5);
+  box-shadow: none;
+  font-size: 14px;
+  padding: 14px;
+}
+
+.btn-ghost:hover { border-color: rgba(192,132,252,0.6); color: #c084fc; box-shadow: none; }
+
+/* Dice scene */
+#dice-scene {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+  gap: 0;
+}
+
+#dice-scene.active { display: flex; }
+
+#three-canvas {
+  width: 300px;
+  height: 300px;
+}
+
+.dice-status {
+  font-size: 15px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 4px;
+  min-height: 24px;
+  text-align: center;
+  font-style: italic;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* Result */
+#result-screen {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+  gap: 16px;
+}
+
+#result-screen.active {
+  display: flex;
+  animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.result-emoji {
+  font-size: 72px;
+  line-height: 1;
+  filter: drop-shadow(0 0 20px rgba(192,132,252,0.8));
+  animation: floatEmoji 3s ease-in-out infinite;
+}
+
+@keyframes floatEmoji {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.result-card {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(192,132,252,0.2);
+  border-radius: 24px;
+  padding: 28px;
+  text-align: center;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.result-main {
+  font-size: 24px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  line-height: 1.2;
+  background: linear-gradient(135deg, #fff, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.result-desc {
+  font-size: 14px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.7;
+  margin-bottom: 20px;
+}
+
+.result-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(192,132,252,0.3), transparent);
+  margin: 20px 0;
+}
+
+.result-question-label {
+  font-size: 11px;
+  color: #c084fc;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.result-question {
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
+  font-style: italic;
+  line-height: 1.5;
+}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div class="app">
+  <div class="logo">🎲 Кубик Судьбы</div>
+  <div class="subtitle">Узнай что будет между вами</div>
+
+  <div class="dots" id="dots">
+    <div class="dot active" id="d1"></div>
+    <div class="dot" id="d2"></div>
+    <div class="dot" id="d3"></div>
+  </div>
+
+  <div class="steps">
+    <div class="step active" id="step1">
+      <div class="step-label">Шаг 1 из 3</div>
+      <div class="step-title">Расскажи о себе</div>
+      <div class="step-desc">Кто ты, чем живёшь, что чувствуешь — пиши всё что хочешь</div>
+      <textarea id="inp1" placeholder="Напиши о себе..."></textarea>
+      <button class="btn" onclick="next(1)">Далее →</button>
+    </div>
+
+    <div class="step" id="step2">
+      <div class="step-label">Шаг 2 из 3</div>
+      <div class="step-title">Что ты хочешь узнать?</div>
+      <div class="step-desc">Задай вопрос — кубик ответит</div>
+      <textarea id="inp2" placeholder="Например: любит ли он меня? напишет ли первым?"></textarea>
+      <button class="btn" onclick="next(2)">Далее →</button>
+      <button class="btn btn-ghost" onclick="back(1)">← Назад</button>
+    </div>
+
+    <div class="step" id="step3">
+      <div class="step-label">Шаг 3 из 3</div>
+      <div class="step-title">Опиши человека, о котором думаешь</div>
+      <div class="step-desc">Имя, страница, характер — всё что знаешь</div>
+      <textarea id="inp3" placeholder="Опиши его/её..."></textarea>
+      <button class="btn" onclick="rollDice()">🎲 Бросить кубик!</button>
+      <button class="btn btn-ghost" onclick="back(2)">← Назад</button>
+    </div>
+  </div>
+
+  <div id="dice-scene">
+    <canvas id="three-canvas"></canvas>
+    <div class="dice-status" id="dice-status">Кубик крутится...</div>
+  </div>
+
+  <div id="result-screen">
+    <div class="result-emoji" id="result-emoji"></div>
+    <div class="result-card">
+      <div class="result-main" id="result-main"></div>
+      <div class="result-desc" id="result-desc"></div>
+      <div class="result-divider"></div>
+      <div class="result-question-label">Твой вопрос</div>
+      <div class="result-question" id="r-question"></div>
+    </div>
+    <button class="btn" onclick="restart()">🎲 Бросить ещё раз</button>
+  </div>
+</div>
+
+<script>
+// ========== BACKGROUND ==========
+(function() {
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Stars
+  const stars = Array.from({length: 200}, () => ({
+    x: Math.random(), y: Math.random(),
+    r: Math.random() * 1.2 + 0.3,
+    a: Math.random() * Math.PI * 2,
+    speed: Math.random() * 0.008 + 0.003,
+    color: ['#fff', '#c084fc', '#818cf8', '#f9a8d4'][Math.floor(Math.random()*4)]
+  }));
+
+  // Nebula blobs
+  const nebulae = [
+    { x: 0.15, y: 0.2, r: 300, color: 'rgba(120,40,200,' },
+    { x: 0.85, y: 0.7, r: 250, color: 'rgba(80,20,180,' },
+    { x: 0.5,  y: 0.5, r: 200, color: 'rgba(180,50,150,' },
+    { x: 0.2,  y: 0.8, r: 180, color: 'rgba(60,30,160,' },
+    { x: 0.75, y: 0.15,r: 220, color: 'rgba(140,60,220,' },
+  ];
+
+  function draw() {
+    ctx.fillStyle = '#050008';
+    ctx.fillRect(0, 0, W, H);
+
+    // Nebulae
+    nebulae.forEach(n => {
+      const grd = ctx.createRadialGradient(n.x*W, n.y*H, 0, n.x*W, n.y*H, n.r);
+      grd.addColorStop(0, n.color + '0.12)');
+      grd.addColorStop(0.5, n.color + '0.05)');
+      grd.addColorStop(1, n.color + '0)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, W, H);
+    });
+
+    // Stars
+    stars.forEach(s => {
+      s.a += s.speed;
+      const alpha = 0.3 + Math.sin(s.a) * 0.5;
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ========== DATA ==========
+const RESULTS = {
+  1: { emoji:"👻", main:"Прочитал(а) и не ответил(а)...", desc:"Не бери в голову — напиши ещё раз, может просто занят(а)." },
+  2: { emoji:"😶", main:"Отвечает сухо и редко", desc:"Интерес есть, но держит дистанцию. Дай время." },
+  3: { emoji:"😊", main:"Отвечает с улыбками и эмодзи", desc:"Хороший знак! Общение идёт тепло." },
+  4: { emoji:"💭", main:"Сам(а) пишет первым(ой)", desc:"Ты у него/неё в голове — не упусти момент!" },
+  5: { emoji:"🔥", main:"Лайкает все твои посты и сторис", desc:"Явный интерес! Пиши — получишь ответ." },
+  6: { emoji:"❤️", main:"Отвечает мгновенно и пишет много", desc:"Джекпот! Ждёт твоих сообщений." }
+};
+
+// ========== STEPS ==========
+function next(step) {
+  const inp = document.getElementById('inp' + step);
+  if (!inp.value.trim()) {
+    inp.style.borderColor = '#f87171';
+    inp.style.boxShadow = '0 0 0 3px rgba(248,113,113,0.15)';
+    setTimeout(() => {
+      inp.style.borderColor = 'rgba(192,132,252,0.25)';
+      inp.style.boxShadow = 'none';
+    }, 1200);
+    return;
+  }
+  document.getElementById('step'+step).classList.remove('active');
+  document.getElementById('step'+(step+1)).classList.add('active');
+  updateDots(step+1);
+}
+
+function back(step) {
+  document.getElementById('step'+(step+1)).classList.remove('active');
+  document.getElementById('step'+step).classList.add('active');
+  updateDots(step);
+}
+
+function updateDots(active) {
+  for (let i=1; i<=3; i++) {
+    document.getElementById('d'+i).classList.toggle('active', i===active);
+  }
+}
+
+// ========== THREE.JS DICE ==========
+let scene, camera, renderer, cube, animId;
+let spinning = false, spinTime = 0;
+const SPIN_FRAMES = 200;
+let targetValue = 1;
+
+function makeFaceTexture(n) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d');
+
+  // Deep glossy background
+  const bg = ctx.createLinearGradient(0, 0, 256, 256);
+  bg.addColorStop(0, '#1a0035');
+  bg.addColorStop(0.5, '#0d0020');
+  bg.addColorStop(1, '#1a0035');
+  ctx.fillStyle = bg;
+  ctx.roundRect(0, 0, 256, 256, 32);
+  ctx.fill();
+
+  // Border glow
+  ctx.strokeStyle = 'rgba(192,132,252,0.6)';
+  ctx.lineWidth = 4;
+  ctx.roundRect(4, 4, 248, 248, 28);
+  ctx.stroke();
+
+  // Inner highlight
+  const hl = ctx.createLinearGradient(0, 0, 0, 80);
+  hl.addColorStop(0, 'rgba(255,255,255,0.08)');
+  hl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hl;
+  ctx.roundRect(4, 4, 248, 80, 28);
+  ctx.fill();
+
+  // Dots
+  const positions = {
+    1: [[0.5, 0.5]],
+    2: [[0.3, 0.3], [0.7, 0.7]],
+    3: [[0.3, 0.3], [0.5, 0.5], [0.7, 0.7]],
+    4: [[0.3,0.3],[0.7,0.3],[0.3,0.7],[0.7,0.7]],
+    5: [[0.3,0.3],[0.7,0.3],[0.5,0.5],[0.3,0.7],[0.7,0.7]],
+    6: [[0.3,0.25],[0.7,0.25],[0.3,0.5],[0.7,0.5],[0.3,0.75],[0.7,0.75]]
+  };
+
+  positions[n].forEach(([px, py]) => {
+    const x = px * 256, y = py * 256;
+    // Dot glow
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, 22);
+    glow.addColorStop(0, 'rgba(240,180,255,0.6)');
+    glow.addColorStop(1, 'rgba(192,132,252,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, 22, 0, Math.PI*2);
+    ctx.fill();
+
+    // Dot body
+    const dotGrad = ctx.createRadialGradient(x-3, y-3, 1, x, y, 13);
+    dotGrad.addColorStop(0, '#f0e0ff');
+    dotGrad.addColorStop(0.5, '#c084fc');
+    dotGrad.addColorStop(1, '#7c3aed');
+    ctx.fillStyle = dotGrad;
+    ctx.beginPath();
+    ctx.arc(x, y, 13, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  return new THREE.CanvasTexture(c);
+}
+
+function initThree() {
+  const canvas = document.getElementById('three-canvas');
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(300, 300);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+  camera.position.set(0, 0, 6);
+
+  // Lights
+  const ambient = new THREE.AmbientLight(0x8844aa, 0.5);
+  scene.add(ambient);
+
+  const mainLight = new THREE.PointLight(0xc084fc, 3, 15);
+  mainLight.position.set(4, 4, 4);
+  scene.add(mainLight);
+
+  const fillLight = new THREE.PointLight(0xf472b6, 2, 15);
+  fillLight.position.set(-4, -2, 3);
+  scene.add(fillLight);
+
+  const rimLight = new THREE.PointLight(0x818cf8, 1.5, 15);
+  rimLight.position.set(0, -4, -2);
+  scene.add(rimLight);
+
+  // Cube with rounded look via materials
+  const geo = new THREE.BoxGeometry(2, 2, 2);
+  const mats = [1,2,3,4,5,6].map(n =>
+    new THREE.MeshStandardMaterial({
+      map: makeFaceTexture(n),
+      roughness: 0.15,
+      metalness: 0.4,
+      envMapIntensity: 1
+    })
+  );
+
+  cube = new THREE.Mesh(geo, mats);
+  scene.add(cube);
+
+  // Particle ring around cube
+  const ringGeo = new THREE.BufferGeometry();
+  const ringVerts = [];
+  for (let i=0; i<80; i++) {
+    const angle = (i/80) * Math.PI * 2;
+    const r = 2.8 + Math.random() * 0.5;
+    ringVerts.push(Math.cos(angle)*r, (Math.random()-0.5)*0.4, Math.sin(angle)*r);
+  }
+  ringGeo.setAttribute('position', new THREE.Float32BufferAttribute(ringVerts, 3));
+  const ringMat = new THREE.PointsMaterial({ color: 0xc084fc, size: 0.04, transparent: true, opacity: 0.6 });
+  scene.add(new THREE.Points(ringGeo, ringMat));
+
+  animateDice();
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+}
+
+function animateDice() {
+  animId = requestAnimationFrame(animateDice);
+
+  if (spinning) {
+    spinTime++;
+    const t = spinTime / SPIN_FRAMES;
+    const eased = easeInOutCubic(Math.min(t, 1));
+    const speed = spinning ? (0.12 * (1 - eased * 0.85) + 0.015) : 0.005;
+
+    cube.rotation.x += speed * 1.1;
+    cube.rotation.y += speed * 1.7;
+    cube.rotation.z += speed * 0.4;
+
+    if (spinTime >= SPIN_FRAMES) {
+      spinning = false;
+      // Glow effect on stop
+      setTimeout(showResult, 400);
+    }
+  } else {
+    cube.rotation.y += 0.004;
+    cube.rotation.x += 0.001;
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ========== ROLL ==========
+function rollDice() {
+  const inp3 = document.getElementById('inp3');
+  if (!inp3.value.trim()) {
+    inp3.style.borderColor = '#f87171';
+    setTimeout(() => inp3.style.borderColor = 'rgba(192,132,252,0.25)', 1200);
+    return;
+  }
+
+  document.querySelector('.steps').style.display = 'none';
+  document.getElementById('dots').style.display = 'none';
+  document.getElementById('dice-scene').classList.add('active');
+
+  targetValue = Math.ceil(Math.random() * 6);
+  spinTime = 0;
+  spinning = true;
+
+  initThree();
+
+  const statuses = [
+    "Кубик крутится...",
+    "Вселенная думает...",
+    "Звёзды решают...",
+    "Судьба говорит...",
+    "Почти готово..."
+  ];
+  let si = 0;
+  const iv = setInterval(() => {
+    document.getElementById('dice-status').textContent = statuses[si % statuses.length];
+    si++;
+    if (!spinning) clearInterval(iv);
+  }, 700);
+}
+
+function showResult() {
+  cancelAnimationFrame(animId);
+  if (renderer) renderer.dispose();
+
+  document.getElementById('dice-scene').classList.remove('active');
+
+  const r = RESULTS[targetValue];
+  document.getElementById('result-emoji').textContent = r.emoji;
+  document.getElementById('result-main').textContent = r.main;
+  document.getElementById('result-desc').textContent = r.desc;
+  document.getElementById('r-question').textContent = document.getElementById('inp2').value;
+  document.getElementById('result-screen').classList.add('active');
+}
+
+function restart() {
+  document.getElementById('result-screen').classList.remove('active');
+  ['inp1','inp2','inp3'].forEach(id => document.getElementById(id).value = '');
+  document.querySelector('.steps').style.display = '';
+  document.getElementById('dots').style.display = 'flex';
+  ['step2','step3'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById('step1').classList.add('active');
+  updateDots(1);
+  renderer = null; cube = null; scene = null;
+}
+</script>
+</body>
+</html>
